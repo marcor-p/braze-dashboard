@@ -1,0 +1,63 @@
+name: Braze daily extract + alerts
+
+on:
+  schedule:
+    - cron: "30 6 * * *"     # daily 06:30 UTC
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run extractor (Canvases + Campaigns)
+        env:
+          BRAZE_API_KEY: ${{ secrets.BRAZE_API_KEY }}
+          BRAZE_REST_ENDPOINT: ${{ secrets.BRAZE_REST_ENDPOINT }}
+          BRAZE_DAYS: "30"
+          BRAZE_OUT_DIR: "./out"
+        run: python braze_extract.py
+
+      - name: Run alerts
+        env:
+          BRAZE_OUT_DIR: "./out"
+        run: python alerts.py
+
+      - name: Post Slack digest (if webhook configured)
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          BRAZE_OUT_DIR: "./out"
+        run: python alerts.py --slack --quiet
+
+      - name: Move JSON next to dashboard
+        run: cp out/dashboard_data.json dashboard_data.json
+
+      - name: Commit refreshed data
+        run: |
+          git config user.name "braze-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add dashboard_data.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: Braze daily refresh $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "No changes."
+          fi
+
+      # OPTIONAL — host the dashboard via GitHub Pages.
+      # Enable Pages in repo settings (source = GitHub Actions), then uncomment:
+      #
+      # - uses: actions/upload-pages-artifact@v3
+      #   with: { path: . }
+      # - uses: actions/deploy-pages@v4

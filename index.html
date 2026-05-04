@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Braze KPIs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=JetBrains+Mono:wght@400;500;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0e0c;
+    --bg-soft: #1a1816;
+    --bg-card: #16140f;
+    --ink: #f4ecdc;
+    --ink-dim: #a89c84;
+    --ink-faint: #6b6253;
+    --line: #2a2622;
+    --accent: #ff9a3c;
+    --accent-2: #f0e0c0;
+    --good: #6dcf95;
+    --bad: #e07a6a;
+    --warn: #d9a441;
+    --display: 'Fraunces', Georgia, serif;
+    --body: 'Manrope', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--body); -webkit-font-smoothing: antialiased; }
+  body {
+    background-image:
+      radial-gradient(circle at 12% 8%, rgba(255,154,60,0.08), transparent 35%),
+      radial-gradient(circle at 95% 90%, rgba(240,224,192,0.04), transparent 40%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.025 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 36px 48px 28px;
+    border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 32px;
+  }
+  .brand { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
+  h1 { font-family: var(--display); font-weight: 800; font-size: clamp(36px, 5vw, 60px); margin: 0; line-height: 0.95; letter-spacing: -0.02em; color: var(--ink); }
+  h1 em { font-style: italic; color: var(--accent); font-weight: 400; }
+  .meta { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-align: right; line-height: 1.7; }
+  .meta b { color: var(--ink-dim); font-weight: 500; }
+
+  main { padding: 32px 48px 64px; display: grid; gap: 24px; }
+
+  .filters {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px; padding: 18px 22px;
+    background: var(--bg-soft); border: 1px solid var(--line); border-radius: 4px;
+  }
+  .filter label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+  .filter select, .filter input { width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 9px 12px; font-family: var(--body); font-size: 14px; border-radius: 2px; }
+  .filter select:focus { outline: none; border-color: var(--accent); }
+  .filter select:disabled { opacity: 0.4; cursor: not-allowed; }
+  .filter-window { display: flex; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+  .filter-window button { flex: 1; background: var(--bg); color: var(--ink-dim); border: 0; padding: 9px; font-family: var(--mono); font-size: 11px; font-weight: 500; cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.15s; border-right: 1px solid var(--line); }
+  .filter-window button:last-child { border-right: 0; }
+  .filter-window button.active { background: var(--accent); color: var(--bg); }
+  .filter-window button:not(.active):hover { background: var(--bg-soft); color: var(--ink); }
+
+  /* KPI cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .kpi { background: var(--bg-card); padding: 22px 20px 18px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; }
+  .kpi::before { content: ""; position: absolute; top: 0; left: 0; height: 2px; width: 32px; background: var(--accent); }
+  .kpi-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
+  .kpi-value { font-family: var(--display); font-weight: 600; font-size: 34px; line-height: 1; color: var(--ink); letter-spacing: -0.02em; }
+  .kpi-delta { font-family: var(--mono); font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .kpi-delta.up { color: var(--good); }
+  .kpi-delta.down { color: var(--bad); }
+  .kpi-delta.flat { color: var(--ink-faint); }
+
+  .row-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+  @media (max-width: 1100px) { .row-2 { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--bg-card); border: 1px solid var(--line); padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+  .panel-title { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .panel-sub { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .chart-wrap { height: 320px; position: relative; }
+
+  /* Refresh button */
+  .refresh-btn { background: var(--bg-soft); color: var(--ink-dim); border: 1px solid var(--line); padding: 8px 14px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; border-radius: 2px; margin-top: 8px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 8px; }
+  .refresh-btn:hover:not(:disabled) { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
+  .refresh-btn .spinner { width: 10px; height: 10px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
+  .refresh-btn.loading .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .refresh-status { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); margin-top: 6px; min-height: 14px; }
+  .refresh-status.ok { color: var(--good); }
+  .refresh-status.err { color: var(--bad); }
+
+  /* View tabs */
+  .view-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; background: var(--bg-soft); }
+  .view-tabs button { background: transparent; color: var(--ink-dim); border: 0; padding: 11px 22px; font-family: var(--display); font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.15s; border-right: 1px solid var(--line); letter-spacing: -0.01em; position: relative; }
+  .view-tabs button:last-child { border-right: 0; }
+  .view-tabs button.active { background: var(--ink); color: var(--bg); }
+  .view-tabs button:not(.active):hover { color: var(--ink); background: var(--bg); }
+  .alert-badge { display: inline-block; background: var(--bad); color: var(--bg); border-radius: 999px; padding: 1px 7px; font-family: var(--mono); font-size: 10px; font-weight: 700; margin-left: 8px; vertical-align: middle; }
+
+  /* Channel chips/pills */
+  .channel-pill { display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; color: var(--bg); }
+  .ch-email { background: #f0e0c0; }
+  .ch-ios_push { background: #ff9a3c; }
+  .ch-android_push { background: #6dcf95; }
+  .ch-web_push { background: #d9a441; }
+  .ch-sms { background: #e07a6a; color: var(--ink); }
+  .ch-webhook { background: #8a7eb8; color: var(--ink); }
+  .ch-none, .ch-__total__ { background: var(--line); color: var(--ink-dim); }
+  .ch-__all__ { background: var(--bg-soft); color: var(--ink-dim); border: 1px solid var(--line); }
+
+  .type-pill { display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; }
+  .type-canvas { background: rgba(255,154,60,0.15); color: var(--accent); border: 1px solid rgba(255,154,60,0.3); }
+  .type-campaign { background: rgba(109,207,149,0.12); color: var(--good); border: 1px solid rgba(109,207,149,0.3); }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--body); font-size: 13px; }
+  thead th { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 500; white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 14px; border-bottom: 1px solid var(--line); color: var(--ink-dim); }
+  tbody td.num { text-align: right; font-family: var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+  tbody td.step-name, tbody td.flow-name { color: var(--ink); font-weight: 500; }
+  tbody tr:hover { background: rgba(255, 154, 60, 0.04); }
+
+  /* Overview table */
+  table.overview thead th { cursor: pointer; user-select: none; transition: color 0.15s; }
+  table.overview thead th:hover { color: var(--ink); }
+  table.overview thead th.sorted { color: var(--accent); }
+  table.overview thead th .sort-arrow { margin-left: 4px; opacity: 0.6; }
+  table.overview tbody tr { cursor: pointer; }
+  table.overview tbody td.flow-name {
+    font-family: var(--display); font-size: 15px;
+  }
+  table.overview tbody td.flow-name .channels-inline {
+    display: block; font-family: var(--mono); font-size: 10px; color: var(--ink-faint); margin-top: 4px; letter-spacing: 0.08em;
+  }
+  table.overview tbody td .delta { display: inline-block; padding: 2px 6px; border-radius: 2px; font-family: var(--mono); font-size: 11px; font-weight: 500; }
+  .delta.up { background: rgba(109,207,149,0.15); color: var(--good); }
+  .delta.down { background: rgba(224,122,106,0.15); color: var(--bad); }
+  .delta.flat { color: var(--ink-faint); }
+
+  .health-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+  .health-good { background: var(--good); box-shadow: 0 0 6px var(--good); }
+  .health-warn { background: var(--warn); }
+  .health-bad { background: var(--bad); box-shadow: 0 0 6px var(--bad); }
+  .health-cold { background: var(--ink-faint); }
+
+  /* Alerts */
+  .alert-card { background: var(--bg-card); border: 1px solid var(--line); border-left: 3px solid var(--ink-faint); padding: 16px 20px; margin-bottom: 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; transition: all 0.15s; cursor: pointer; }
+  .alert-card.severity-critical { border-left-color: var(--bad); }
+  .alert-card.severity-warning { border-left-color: var(--warn); }
+  .alert-card:hover { background: rgba(255,154,60,0.04); }
+  .alert-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 700; }
+  .alert-icon.severity-critical { background: rgba(224,122,106,0.15); color: var(--bad); }
+  .alert-icon.severity-warning { background: rgba(217,164,65,0.15); color: var(--warn); }
+  .alert-flow { font-family: var(--display); font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .alert-flow .alert-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); margin-left: 8px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 400; }
+  .alert-msg { font-size: 13px; color: var(--ink-dim); }
+  .alert-rule { font-family: var(--mono); font-size: 10px; color: var(--ink-faint); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .empty-state { padding: 60px 24px; text-align: center; color: var(--ink-faint); font-family: var(--display); font-style: italic; font-size: 18px; }
+
+  footer { padding: 24px 48px; color: var(--ink-faint); font-family: var(--mono); font-size: 11px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; }
+  .pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--good); margin-right: 6px; animation: pulse 2s infinite ease-in-out; }
+  @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  .file-input-wrap { padding: 18px 24px; background: var(--bg-soft); border: 1px dashed var(--line); border-radius: 4px; font-family: var(--mono); font-size: 12px; color: var(--ink-dim); display: flex; align-items: center; gap: 14px; }
+  .file-input-wrap input[type="file"] { color: var(--ink-dim); font-family: var(--mono); }
+  .file-input-wrap input[type="file"]::file-selector-button { background: var(--accent); color: var(--bg); border: 0; padding: 8px 14px; font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer; margin-right: 12px; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="eyebrow">Braze · Canvases &amp; Campaigns</span>
+    <h1>Send, <em>delivered</em>, <em>read</em>.</h1>
+  </div>
+  <div class="meta" id="meta">
+    <div><b>generated</b> —</div>
+    <div><b>endpoint</b> —</div>
+    <div><b>days pulled</b> —</div>
+    <button class="refresh-btn" id="refresh-btn" style="display:none">
+      <span class="spinner"></span><span class="label">Refresh data</span>
+    </button>
+    <div class="refresh-status" id="refresh-status"></div>
+  </div>
+</header>
+
+<main>
+
+  <div class="file-input-wrap" id="file-input-wrap">
+    <span><span class="pulse"></span>Load <code style="color:var(--ink)">dashboard_data.json</code> →</span>
+    <input type="file" id="file-input" accept="application/json" />
+    <span style="margin-left:auto;color:var(--ink-faint)">or place the file alongside this page &amp; refresh</span>
+  </div>
+
+  <div class="filters" id="filters" style="display:none">
+    <div class="filter">
+      <label>Type</label>
+      <select id="f-type">
+        <option value="__all__">Canvases + Campaigns</option>
+        <option value="canvas">Canvases only</option>
+        <option value="campaign">Campaigns only</option>
+      </select>
+    </div>
+    <div class="filter">
+      <label>Flow</label>
+      <select id="f-flow"><option value="__all__">All flows</option></select>
+    </div>
+    <div class="filter">
+      <label>Channel</label>
+      <select id="f-channel">
+        <option value="__all__">All channels</option>
+        <option value="email">Email</option>
+        <option value="ios_push">iOS push</option>
+        <option value="android_push">Android push</option>
+        <option value="web_push">Web push</option>
+        <option value="sms">SMS</option>
+        <option value="webhook">Webhook</option>
+      </select>
+    </div>
+    <div class="filter">
+      <label>Step</label>
+      <select id="f-step"><option value="__all__">All steps</option></select>
+    </div>
+    <div class="filter">
+      <label>Window</label>
+      <div class="filter-window" id="f-window">
+        <button data-d="1">1d</button>
+        <button data-d="7" class="active">7d</button>
+        <button data-d="14">14d</button>
+        <button data-d="30">30d</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-switcher" style="display:none">
+    <div class="view-tabs" id="view-tabs">
+      <button data-view="overview" class="active">All flows</button>
+      <button data-view="detail">Detail</button>
+      <button data-view="alerts">Alerts <span id="alert-badge" class="alert-badge" style="display:none">0</span></button>
+    </div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <section class="panel" id="overview-panel" style="display:none">
+    <div class="panel-head">
+      <h2 class="panel-title" id="overview-title">All flows — at a glance</h2>
+      <div class="panel-sub" id="overview-sub">—</div>
+    </div>
+    <div class="table-wrap">
+      <table class="overview" id="overview-table">
+        <thead>
+          <tr>
+            <th data-sort="name">Name <span class="sort-arrow"></span></th>
+            <th data-sort="flow_type">Type <span class="sort-arrow"></span></th>
+            <th data-sort="sent" class="num">Sent <span class="sort-arrow"></span></th>
+            <th data-sort="delivered_rate" class="num">Delivery % <span class="sort-arrow"></span></th>
+            <th data-sort="open_rate" class="num sorted">Open % <span class="sort-arrow">▼</span></th>
+            <th data-sort="open_delta" class="num">Δ Open % <span class="sort-arrow"></span></th>
+            <th data-sort="click_rate" class="num">Click % <span class="sort-arrow"></span></th>
+            <th data-sort="conversions" class="num">Conv. <span class="sort-arrow"></span></th>
+            <th data-sort="unsubs" class="num">Unsubs <span class="sort-arrow"></span></th>
+            <th data-sort="health" class="num">Health <span class="sort-arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody id="overview-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DETAIL -->
+  <div id="detail-view" style="display:none">
+
+  <div class="kpi-grid" id="kpis"></div>
+
+  <div class="row-2" id="content">
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Daily evolution</h2>
+        <div class="panel-sub" id="trend-sub">—</div>
+      </div>
+      <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Active channels</h2>
+        <div class="panel-sub">window total</div>
+      </div>
+      <div class="chart-wrap"><canvas id="channel-chart"></canvas></div>
+    </section>
+  </div>
+
+  <section class="panel" id="step-panel">
+    <div class="panel-head">
+      <h2 class="panel-title">By step</h2>
+      <div class="panel-sub" id="step-sub">—</div>
+    </div>
+    <div class="table-wrap">
+      <table id="step-table">
+        <thead>
+          <tr>
+            <th>Step</th>
+            <th>Channel</th>
+            <th class="num">Sent</th>
+            <th class="num">Delivered</th>
+            <th class="num">Delivery %</th>
+            <th class="num">Opens / Direct</th>
+            <th class="num">Open %</th>
+            <th class="num">Clicks</th>
+            <th class="num">Click %</th>
+            <th class="num">Errors / Bounces</th>
+          </tr>
+        </thead>
+        <tbody id="step-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  </div><!-- /detail -->
+
+  <!-- ALERTS -->
+  <section class="panel" id="alerts-panel" style="display:none">
+    <div class="panel-head">
+      <h2 class="panel-title">Alerts</h2>
+      <div class="panel-sub" id="alerts-sub">—</div>
+    </div>
+    <div id="alerts-list"></div>
+  </section>
+
+  <div id="empty" class="empty-state">— Awaiting data —</div>
+
+</main>
+
+<footer>
+  <div>Built for Almedia · Braze REST · daily refresh</div>
+  <div id="footer-meta">—</div>
+</footer>
+
+<script>
+// ============================================================================
+// Data loading
+// ============================================================================
+let DATA = null;
+let chartTrend = null, chartChannel = null;
+let currentView = 'overview';
+let overviewSort = { key: 'open_rate', dir: 'desc' };
+
+async function tryLoad() {
+  try {
+    const r = await fetch('dashboard_data.json', { cache: 'no-store' });
+    if (r.ok) { DATA = await r.json(); onLoaded(); return true; }
+  } catch (e) {}
+  return false;
+}
+
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  DATA = JSON.parse(await f.text()); onLoaded();
+});
+
+function onLoaded() {
+  // Backwards compat: sample data may have used 'canvases' instead of 'flows'
+  if (!DATA.flows && DATA.canvases) {
+    DATA.flows = DATA.canvases.map(c => ({
+      ...c, flow_id: c.canvas_id, flow_type: 'canvas', name: c.name,
+    }));
+    DATA.rows = DATA.rows.map(r => ({
+      ...r, flow_id: r.canvas_id || r.flow_id, flow_type: r.flow_type || 'canvas',
+      flow_name: r.canvas_name || r.flow_name,
+    }));
+  }
+  if (!DATA.alerts) DATA.alerts = [];
+
+  document.getElementById('file-input-wrap').style.display = 'none';
+  document.getElementById('filters').style.display = 'grid';
+  document.getElementById('view-switcher').style.display = 'block';
+  document.getElementById('empty').style.display = 'none';
+
+  document.getElementById('meta').innerHTML = `
+    <div><b>generated</b> ${fmtDate(DATA.generated_at)}</div>
+    <div><b>endpoint</b> ${escapeHtml(DATA.endpoint || '—')}</div>
+    <div><b>days pulled</b> ${DATA.days_pulled}</div>
+    <button class="refresh-btn" id="refresh-btn" style="display:none">
+      <span class="spinner"></span><span class="label">Refresh data</span>
+    </button>
+    <div class="refresh-status" id="refresh-status"></div>`;
+  setupRefreshButton();
+
+  document.getElementById('footer-meta').textContent =
+    `${DATA.flows.length} flows · ${DATA.rows.length} rows · ${DATA.alerts.length} alerts`;
+
+  // Update alert badge
+  const flowAlerts = DATA.alerts.filter(a => a.step_id === '__flow__');
+  const badge = document.getElementById('alert-badge');
+  if (flowAlerts.length > 0) {
+    badge.textContent = flowAlerts.length;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  populateFlowFilter();
+  populateStepFilter();
+  bindFilters();
+  bindViewSwitcher();
+  bindOverviewSorting();
+  setView(currentView);
+  render();
+}
+
+// ============================================================================
+// Filters
+// ============================================================================
+function getFilters() {
+  return {
+    type: document.getElementById('f-type').value,
+    flow: document.getElementById('f-flow').value,
+    channel: document.getElementById('f-channel').value,
+    step: document.getElementById('f-step').value,
+    window: parseInt(document.querySelector('#f-window button.active').dataset.d, 10),
+  };
+}
+
+function populateFlowFilter() {
+  const sel = document.getElementById('f-flow');
+  while (sel.options.length > 1) sel.remove(1);
+  const f = getFilters();
+  const flows = DATA.flows.filter(x => f.type === '__all__' || x.flow_type === f.type);
+  for (const fl of flows) {
+    const opt = document.createElement('option');
+    opt.value = fl.flow_id;
+    opt.textContent = `[${fl.flow_type === 'canvas' ? 'CV' : 'CP'}] ${fl.name}`;
+    sel.appendChild(opt);
+  }
+}
+
+function populateStepFilter() {
+  const sel = document.getElementById('f-step');
+  while (sel.options.length > 1) sel.remove(1);
+  const f = getFilters();
+  let steps = [];
+  if (f.flow === '__all__') {
+    const seen = new Set();
+    for (const fl of DATA.flows) {
+      for (const s of (fl.steps || [])) {
+        if (s.step_type !== 'message') continue;
+        if (seen.has(s.step_name)) continue;
+        seen.add(s.step_name);
+        steps.push({ id: s.step_name, name: s.step_name });
+      }
+    }
+  } else {
+    const fl = DATA.flows.find(x => x.flow_id === f.flow);
+    if (fl) steps = (fl.steps || [])
+      .filter(s => s.step_type === 'message')
+      .map(s => ({ id: s.step_id, name: s.step_name }));
+  }
+  for (const s of steps) {
+    const o = document.createElement('option'); o.value = s.id; o.textContent = s.name;
+    sel.appendChild(o);
+  }
+}
+
+function bindFilters() {
+  document.getElementById('f-type').addEventListener('change', () => {
+    populateFlowFilter(); populateStepFilter(); render();
+  });
+  document.getElementById('f-flow').addEventListener('change', () => {
+    populateStepFilter(); render();
+  });
+  document.getElementById('f-channel').addEventListener('change', render);
+  document.getElementById('f-step').addEventListener('change', render);
+  document.querySelectorAll('#f-window button').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('#f-window button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); render();
+  }));
+}
+
+function bindViewSwitcher() {
+  document.querySelectorAll('#view-tabs button').forEach(btn =>
+    btn.addEventListener('click', () => setView(btn.dataset.view))
+  );
+}
+
+function bindOverviewSorting() {
+  document.querySelectorAll('#overview-table thead th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (overviewSort.key === key) overviewSort.dir = overviewSort.dir === 'desc' ? 'asc' : 'desc';
+      else overviewSort = { key, dir: 'desc' };
+      document.querySelectorAll('#overview-table thead th').forEach(t => {
+        t.classList.remove('sorted'); t.querySelector('.sort-arrow').textContent = '';
+      });
+      th.classList.add('sorted');
+      th.querySelector('.sort-arrow').textContent = overviewSort.dir === 'desc' ? '▼' : '▲';
+      renderOverview();
+    });
+  });
+}
+
+function setView(view) {
+  currentView = view;
+  document.querySelectorAll('#view-tabs button').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === view));
+  const overview = document.getElementById('overview-panel');
+  const detail = document.getElementById('detail-view');
+  const alerts = document.getElementById('alerts-panel');
+
+  overview.style.display = view === 'overview' ? 'flex' : 'none';
+  detail.style.display = view === 'detail' ? 'block' : 'none';
+  alerts.style.display = view === 'alerts' ? 'flex' : 'none';
+
+  // Filter applicability per view
+  document.getElementById('f-flow').disabled = view !== 'detail';
+  document.getElementById('f-channel').disabled = view !== 'detail';
+  document.getElementById('f-step').disabled = view !== 'detail';
+
+  render();
+}
+
+// ============================================================================
+// Filter rows
+// ============================================================================
+function isMessageRow(r) { return r.channel !== '__total__' && r.channel !== 'none'; }
+function withinWindow(r, days, end) {
+  return ((end - new Date(r.date)) / 86400000) < days;
+}
+function dataEnd() {
+  const m = DATA.rows.reduce((mx, r) => r.date > mx ? r.date : mx, '1970-01-01');
+  return new Date(m + 'T00:00:00Z');
+}
+
+function filterRows(opts = {}) {
+  const f = getFilters();
+  const days = opts.days || f.window;
+  const end = dataEnd();
+  return DATA.rows.filter(r => {
+    if (!isMessageRow(r)) return false;
+    if (!withinWindow(r, days, end)) return false;
+    if (f.type !== '__all__' && r.flow_type !== f.type) return false;
+    if (f.flow !== '__all__' && r.flow_id !== f.flow) return false;
+    if (f.channel !== '__all__' && r.channel !== f.channel) return false;
+    if (f.step !== '__all__') {
+      if (f.flow !== '__all__') { if (r.step_id !== f.step) return false; }
+      else { if (r.step_name !== f.step) return false; }
+    }
+    return true;
+  });
+}
+
+// ============================================================================
+// Aggregation
+// ============================================================================
+function sum(rows, key) { return rows.reduce((a, r) => a + (Number(r[key]) || 0), 0); }
+
+function aggregateMetrics(rows) {
+  const sent = sum(rows, 'sent');
+  const delivered_email = sum(rows.filter(r => r.channel === 'email'), 'delivered');
+  const sent_push = sum(rows.filter(r => r.channel.endsWith('_push')), 'sent');
+  const bounces_push = sum(rows.filter(r => r.channel.endsWith('_push')), 'bounces');
+  const delivered = delivered_email + Math.max(0, sent_push - bounces_push);
+  const opens = sum(rows.filter(r => r.channel === 'email'), 'unique_opens')
+              + sum(rows.filter(r => r.channel.endsWith('_push')), 'direct_opens');
+  const clicks = sum(rows.filter(r => r.channel === 'email'), 'unique_clicks')
+               + sum(rows.filter(r => r.channel.endsWith('_push')), 'body_clicks');
+  const bounces = sum(rows, 'bounces');
+  const errors = sum(rows, 'errors');
+  const unsubs = sum(rows, 'unsubscribes');
+  const revenue = rows.reduce((a, r) => a + (Number(r.revenue) || 0), 0);
+  const conversions = sum(rows, 'conversions');
+  return {
+    sent, delivered, opens, clicks, bounces, errors, unsubs,
+    deliveryRate: sent > 0 ? delivered / sent : 0,
+    openRate: delivered > 0 ? opens / delivered : 0,
+    clickRate: delivered > 0 ? clicks / delivered : 0,
+    revenue, conversions,
+  };
+}
+
+// ============================================================================
+// Render dispatch
+// ============================================================================
+function render() {
+  if (currentView === 'overview') renderOverview();
+  else if (currentView === 'alerts') renderAlerts();
+  else {
+    renderKPIs(); renderTrend(); renderChannelChart(); renderStepTable();
+    document.getElementById('trend-sub').textContent =
+      `Last ${getFilters().window} days · daily totals`;
+    document.getElementById('step-sub').textContent =
+      `Last ${getFilters().window} days · ${getFilters().channel === '__all__' ? 'all channels' : channelLabel(getFilters().channel)}`;
+  }
+}
+
+// ============================================================================
+// Overview
+// ============================================================================
+function aggregateForFlow(flowId, days, prior) {
+  const end = dataEnd();
+  const cutCur = new Date(end); cutCur.setDate(cutCur.getDate() - days);
+  const cutPrev = new Date(end); cutPrev.setDate(cutPrev.getDate() - days * 2);
+  const inWindow = prior
+    ? r => new Date(r.date) > cutPrev && new Date(r.date) <= cutCur
+    : r => new Date(r.date) > cutCur;
+  const rs = DATA.rows.filter(r =>
+    r.flow_id === flowId && r.channel !== '__total__' && r.channel !== 'none' && inWindow(r)
+  );
+  return aggregateMetrics(rs);
+}
+
+function healthScore(cur, prev) {
+  if (cur.sent < 50) return { tier: 'cold', label: 'Low volume', sortVal: 0 };
+  const openD = cur.openRate - prev.openRate;
+  const ctrD = cur.clickRate - prev.clickRate;
+  const unsubCur = cur.delivered ? cur.unsubs / cur.delivered : 0;
+  const unsubPrev = prev.delivered ? prev.unsubs / prev.delivered : 0;
+  const unsubD = unsubCur - unsubPrev;
+
+  let bad = 0, warn = 0;
+  if (openD < -0.05) bad++; else if (openD < -0.02) warn++;
+  if (ctrD < -0.02) bad++; else if (ctrD < -0.005) warn++;
+  if (unsubD > 0.005) bad++; else if (unsubD > 0.002) warn++;
+  if (cur.deliveryRate < 0.9) bad++;
+
+  if (bad) return { tier: 'bad', label: 'Watch', sortVal: 1 };
+  if (warn) return { tier: 'warn', label: 'Soft', sortVal: 2 };
+  return { tier: 'good', label: 'Healthy', sortVal: 3 };
+}
+
+function renderOverview() {
+  const f = getFilters();
+  const days = f.window;
+  const flows = DATA.flows.filter(x => f.type === '__all__' || x.flow_type === f.type);
+
+  document.getElementById('overview-title').textContent =
+    f.type === 'canvas' ? 'All Canvases' : f.type === 'campaign' ? 'All Campaigns' : 'All flows';
+  document.getElementById('overview-sub').textContent =
+    `Last ${days} day${days === 1 ? '' : 's'} · ${flows.length} flow${flows.length === 1 ? '' : 's'} · click a row to drill in`;
+
+  const enriched = flows.map(c => {
+    const cur = aggregateForFlow(c.flow_id, days, false);
+    const prev = aggregateForFlow(c.flow_id, days, true);
+    return {
+      ...c,
+      sent: cur.sent, delivered: cur.delivered,
+      delivered_rate: cur.deliveryRate,
+      open_rate: cur.openRate, click_rate: cur.clickRate,
+      open_delta: cur.openRate - prev.openRate,
+      conversions: cur.conversions, unsubs: cur.unsubs,
+      health: healthScore(cur, prev),
+    };
+  });
+
+  const { key, dir } = overviewSort;
+  enriched.sort((a, b) => {
+    let av, bv;
+    if (key === 'name') { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+    else if (key === 'flow_type') { av = a.flow_type; bv = b.flow_type; }
+    else if (key === 'health') { av = a.health.sortVal; bv = b.health.sortVal; }
+    else { av = a[key] || 0; bv = b[key] || 0; }
+    if (av < bv) return dir === 'desc' ? 1 : -1;
+    if (av > bv) return dir === 'desc' ? -1 : 1;
+    return 0;
+  });
+
+  const tbody = document.getElementById('overview-tbody');
+  if (enriched.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--ink-faint);padding:48px">No flows match the current filter.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = enriched.map(c => {
+    const channels = (c.channels || []).map(channelLabel).join(' · ') || '—';
+    const oDeltaPP = c.open_delta * 100;
+    const dCls = oDeltaPP >= 0.5 ? 'up' : oDeltaPP <= -0.5 ? 'down' : 'flat';
+    return `
+      <tr data-flow="${c.flow_id}" data-type="${c.flow_type}">
+        <td class="flow-name">${escapeHtml(c.name)}<span class="channels-inline">${escapeHtml(channels)}</span></td>
+        <td><span class="type-pill type-${c.flow_type}">${c.flow_type === 'canvas' ? 'Canvas' : 'Campaign'}</span></td>
+        <td class="num">${fmtInt(c.sent)}</td>
+        <td class="num">${fmtPct(c.delivered_rate)}</td>
+        <td class="num">${fmtPct(c.open_rate)}</td>
+        <td class="num"><span class="delta ${dCls}">${c.sent > 0 ? (oDeltaPP >= 0 ? '+' : '') + oDeltaPP.toFixed(1) + 'pp' : '—'}</span></td>
+        <td class="num">${fmtPct(c.click_rate)}</td>
+        <td class="num">${fmtInt(c.conversions)}</td>
+        <td class="num">${fmtInt(c.unsubs)}</td>
+        <td class="num"><span class="health-dot health-${c.health.tier}"></span>${c.health.label}</td>
+      </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('tr[data-flow]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      document.getElementById('f-type').value = tr.dataset.type;
+      populateFlowFilter();
+      document.getElementById('f-flow').value = tr.dataset.flow;
+      document.getElementById('f-channel').value = '__all__';
+      document.getElementById('f-step').value = '__all__';
+      populateStepFilter();
+      setView('detail');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+}
+
+// ============================================================================
+// Detail view (KPIs + charts + steps)
+// ============================================================================
+function renderKPIs() {
+  const f = getFilters();
+  const cur = aggregateMetrics(filterRows({ days: f.window }));
+  const end = dataEnd();
+  const cutoff = new Date(end); cutoff.setDate(cutoff.getDate() - f.window);
+  const prev = aggregateMetrics(filterRows({ days: f.window * 2 }).filter(r =>
+    new Date(r.date) <= cutoff
+  ));
+
+  const kpis = [
+    { l: 'Sent', v: cur.sent, p: prev.sent, fmt: fmtInt },
+    { l: 'Delivered', v: cur.delivered, p: prev.delivered, fmt: fmtInt },
+    { l: 'Delivery rate', v: cur.deliveryRate, p: prev.deliveryRate, fmt: fmtPct, isRate: true },
+    { l: 'Open rate', v: cur.openRate, p: prev.openRate, fmt: fmtPct, isRate: true },
+    { l: 'Click rate', v: cur.clickRate, p: prev.clickRate, fmt: fmtPct, isRate: true },
+    { l: 'Conversions', v: cur.conversions, p: prev.conversions, fmt: fmtInt },
+    { l: 'Revenue (USD)', v: cur.revenue, p: prev.revenue, fmt: fmtMoney },
+    { l: 'Unsubscribes', v: cur.unsubs, p: prev.unsubs, fmt: fmtInt, inv: true },
+  ];
+
+  document.getElementById('kpis').innerHTML = kpis.map(k => {
+    const d = deltaInfo(k.v, k.p, k.isRate, k.inv);
+    return `<div class="kpi"><div class="kpi-label">${k.l}</div><div class="kpi-value">${k.fmt(k.v)}</div><div class="kpi-delta ${d.cls}">${d.arrow} ${d.text}</div></div>`;
+  }).join('');
+}
+
+function deltaInfo(cur, prev, isRate, inverted) {
+  if (prev === 0 && cur === 0) return { cls: 'flat', arrow: '—', text: 'no change' };
+  if (prev === 0) return { cls: inverted ? 'down' : 'up', arrow: '▲', text: 'new' };
+  const pp = isRate ? (cur - prev) * 100 : ((cur - prev) / prev) * 100;
+  let cls = pp >= 0 ? 'up' : 'down';
+  if (inverted) cls = pp >= 0 ? 'down' : 'up';
+  if (Math.abs(pp) < 0.1) return { cls: 'flat', arrow: '—', text: 'flat' };
+  const text = isRate
+    ? `${pp >= 0 ? '+' : ''}${pp.toFixed(1)}pp vs prior ${getFilters().window}d`
+    : `${pp >= 0 ? '+' : ''}${pp.toFixed(1)}% vs prior ${getFilters().window}d`;
+  return { cls, arrow: pp >= 0 ? '▲' : '▼', text };
+}
+
+function renderTrend() {
+  const rows = filterRows();
+  const byDay = {};
+  for (const r of rows) (byDay[r.date] = byDay[r.date] || []).push(r);
+  const dates = Object.keys(byDay).sort();
+  const sentS = dates.map(d => sum(byDay[d], 'sent'));
+  const opensS = dates.map(d => {
+    const rs = byDay[d];
+    return sum(rs.filter(r => r.channel === 'email'), 'unique_opens')
+         + sum(rs.filter(r => r.channel.endsWith('_push')), 'direct_opens');
+  });
+  const clicksS = dates.map(d => {
+    const rs = byDay[d];
+    return sum(rs.filter(r => r.channel === 'email'), 'unique_clicks')
+         + sum(rs.filter(r => r.channel.endsWith('_push')), 'body_clicks');
+  });
+
+  if (chartTrend) chartTrend.destroy();
+  const ctx = document.getElementById('trend-chart').getContext('2d');
+  chartTrend = new Chart(ctx, {
+    type: 'line',
+    data: { labels: dates.map(d => d.slice(5)), datasets: [
+      ds('Sent', sentS, '#f0e0c0', 'rgba(240,224,192,0.08)'),
+      ds('Opens', opensS, '#ff9a3c', 'rgba(255,154,60,0.10)'),
+      ds('Clicks', clicksS, '#6dcf95', 'rgba(109,207,149,0.08)'),
+    ] },
+    options: chartOpts(),
+  });
+}
+function ds(label, data, border, fill) {
+  return { label, data, borderColor: border, backgroundColor: fill,
+    fill: true, tension: 0.32, borderWidth: 2,
+    pointRadius: 0, pointHoverRadius: 5 };
+}
+function chartOpts() {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: '#a89c84', font: { family: 'JetBrains Mono', size: 11 }, usePointStyle: true, padding: 16 } },
+      tooltip: { backgroundColor: '#16140f', titleColor: '#f4ecdc', bodyColor: '#a89c84',
+        borderColor: '#2a2622', borderWidth: 1, padding: 12, cornerRadius: 2,
+        titleFont: { family: 'JetBrains Mono', weight: 'bold', size: 11 },
+        bodyFont: { family: 'JetBrains Mono', size: 11 } }
+    },
+    scales: {
+      x: { grid: { color: '#2a2622' }, ticks: { color: '#6b6253', font: { family: 'JetBrains Mono', size: 10 } } },
+      y: { grid: { color: '#2a2622' }, ticks: { color: '#6b6253', font: { family: 'JetBrains Mono', size: 10 }, callback: v => fmtInt(v) } }
+    }
+  };
+}
+
+function renderChannelChart() {
+  const rows = filterRows();
+  const channels = ['email', 'ios_push', 'android_push', 'web_push', 'sms', 'webhook'];
+  const totals = channels.map(ch => sum(rows.filter(r => r.channel === ch), 'sent'));
+  const colors = ['#f0e0c0', '#ff9a3c', '#6dcf95', '#d9a441', '#e07a6a', '#8a7eb8'];
+  const present = channels.map((c, i) => ({ c, v: totals[i], color: colors[i] })).filter(x => x.v > 0);
+
+  if (chartChannel) chartChannel.destroy();
+  const ctx = document.getElementById('channel-chart').getContext('2d');
+  chartChannel = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: present.map(p => channelLabel(p.c)),
+      datasets: [{ data: present.map(p => p.v), backgroundColor: present.map(p => p.color),
+        borderColor: '#16140f', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: {
+        legend: { position: 'right', labels: { color: '#a89c84', font: { family: 'JetBrains Mono', size: 11 }, usePointStyle: true, padding: 12 } },
+        tooltip: { backgroundColor: '#16140f', titleColor: '#f4ecdc', bodyColor: '#a89c84',
+          borderColor: '#2a2622', borderWidth: 1,
+          callbacks: { label: c => `${c.label}: ${fmtInt(c.parsed)}` } }
+      }
+    }
+  });
+}
+
+function renderStepTable() {
+  const rows = filterRows();
+  const groups = {};
+  for (const r of rows) {
+    const k = `${r.flow_id}|${r.step_id}|${r.channel}`;
+    (groups[k] = groups[k] || { step: r.step_name, flow: r.flow_name,
+                                ftype: r.flow_type, channel: r.channel, rows: [] }).rows.push(r);
+  }
+  const entries = Object.values(groups).map(g => ({ ...g, ...aggregateMetrics(g.rows) }))
+    .sort((a, b) => b.sent - a.sent);
+
+  const tbody = document.getElementById('step-tbody');
+  if (entries.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--ink-faint);padding:32px">No data for the selected filters.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = entries.map(e => {
+    const opens = e.channel === 'email' ? sum(e.rows, 'unique_opens')
+                : e.channel.endsWith('_push') ? sum(e.rows, 'direct_opens') : 0;
+    const clicks = e.channel === 'email' ? sum(e.rows, 'unique_clicks')
+                 : e.channel.endsWith('_push') ? sum(e.rows, 'body_clicks') : 0;
+    const errBounces = e.channel === 'webhook' ? e.errors : e.bounces;
+    return `<tr>
+      <td class="step-name">${escapeHtml(e.step)}<br>
+        <span style="color:var(--ink-faint);font-size:11px;font-family:var(--mono)">
+          <span class="type-pill type-${e.ftype}">${e.ftype === 'canvas' ? 'CV' : 'CP'}</span>
+          ${escapeHtml(e.flow)}
+        </span>
+      </td>
+      <td><span class="channel-pill ch-${e.channel}">${channelLabel(e.channel)}</span></td>
+      <td class="num">${fmtInt(e.sent)}</td>
+      <td class="num">${fmtInt(e.delivered)}</td>
+      <td class="num">${fmtPct(e.deliveryRate)}</td>
+      <td class="num">${fmtInt(opens)}</td>
+      <td class="num">${fmtPct(e.openRate)}</td>
+      <td class="num">${fmtInt(clicks)}</td>
+      <td class="num">${fmtPct(e.clickRate)}</td>
+      <td class="num">${fmtInt(errBounces)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================================
+// Alerts
+// ============================================================================
+function renderAlerts() {
+  const list = document.getElementById('alerts-list');
+  const all = DATA.alerts || [];
+  const flowAlerts = all.filter(a => a.step_id === '__flow__');
+  document.getElementById('alerts-sub').textContent =
+    `${flowAlerts.length} flow-level · ${all.length - flowAlerts.length} step-level`;
+
+  if (all.length === 0) {
+    list.innerHTML = `<div class="empty-state">All flows healthy. No alerts.</div>`;
+    return;
+  }
+
+  // Group by flow, show severity-ordered
+  const sevRank = { critical: 0, warning: 1 };
+  const sorted = [...all].sort((a, b) =>
+    (sevRank[a.severity] || 9) - (sevRank[b.severity] || 9)
+  );
+
+  list.innerHTML = sorted.map(a => `
+    <div class="alert-card severity-${a.severity}" data-flow="${a.flow_id}" data-type="${a.flow_type}">
+      <div class="alert-icon severity-${a.severity}">${a.severity === 'critical' ? '!' : '⚠'}</div>
+      <div>
+        <div class="alert-flow">
+          ${escapeHtml(a.flow_name)}
+          <span class="alert-meta"><span class="type-pill type-${a.flow_type}">${a.flow_type === 'canvas' ? 'CV' : 'CP'}</span> · ${escapeHtml(a.step_id === '__flow__' ? 'flow level' : a.step_name)} · ${a.channel === '__all__' ? 'all channels' : channelLabel(a.channel)}</span>
+        </div>
+        <div class="alert-msg">${escapeHtml(a.message)}</div>
+      </div>
+      <div class="alert-rule">${escapeHtml(a.rule.replace(/_/g, ' '))}</div>
+    </div>`).join('');
+
+  list.querySelectorAll('.alert-card').forEach(c =>
+    c.addEventListener('click', () => {
+      document.getElementById('f-type').value = c.dataset.type;
+      populateFlowFilter();
+      document.getElementById('f-flow').value = c.dataset.flow;
+      populateStepFilter();
+      setView('detail');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    })
+  );
+}
+
+// ============================================================================
+// Backend / refresh
+// ============================================================================
+async function setupRefreshButton() {
+  let status = null;
+  try {
+    const r = await fetch('/api/status', { cache: 'no-store' });
+    if (r.ok) status = await r.json();
+  } catch {}
+  if (!status) return;
+
+  const btn = document.getElementById('refresh-btn');
+  const statusEl = document.getElementById('refresh-status');
+  if (!btn) return;
+  btn.style.display = 'inline-flex';
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true; btn.classList.add('loading');
+    btn.querySelector('.label').textContent = 'Refreshing…';
+    statusEl.className = 'refresh-status'; statusEl.textContent = '';
+    try {
+      const r = await fetch('/api/refresh', { method: 'POST' });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || 'refresh failed');
+      let tries = 0;
+      while (tries++ < 180) {
+        await new Promise(res => setTimeout(res, 1000));
+        const s = await (await fetch('/api/status', { cache: 'no-store' })).json();
+        if (!s.running) {
+          if (s.last_status === 'error') throw new Error(s.last_error || 'unknown');
+          DATA = await (await fetch('/api/data', { cache: 'no-store' })).json();
+          onLoaded();
+          statusEl.className = 'refresh-status ok';
+          statusEl.textContent = `Refreshed ${new Date().toLocaleTimeString()}`;
+          break;
+        }
+      }
+    } catch (e) {
+      statusEl.className = 'refresh-status err';
+      statusEl.textContent = 'Error: ' + e.message;
+    } finally {
+      btn.disabled = false; btn.classList.remove('loading');
+      btn.querySelector('.label').textContent = 'Refresh data';
+    }
+  });
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+function fmtInt(v) {
+  if (v == null) return '0';
+  const n = Number(v);
+  if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+  return Math.round(n).toLocaleString();
+}
+function fmtPct(v) { return !v ? '0.0%' : (v * 100).toFixed(1) + '%'; }
+function fmtMoney(v) { return !v ? '$0' : '$' + fmtInt(v); }
+function fmtDate(s) { return !s ? '—' : new Date(s).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+function channelLabel(ch) {
+  return ({ email: 'Email', ios_push: 'iOS', android_push: 'Android',
+            web_push: 'Web', sms: 'SMS', webhook: 'Webhook',
+            __all__: 'All', __total__: 'Total', none: 'No msg' })[ch] || ch;
+}
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ============================================================================
+// Boot
+// ============================================================================
+tryLoad();
+</script>
+</body>
+</html>
