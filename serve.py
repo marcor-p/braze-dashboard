@@ -36,7 +36,7 @@ except ImportError:
     sys.exit(1)
 
 ROOT = Path(__file__).resolve().parent
-DATA_PATH = ROOT / "dashboard_data.json"
+DATA_PATH = Path(os.environ.get("BRAZE_OUT_DIR", str(ROOT))) / "dashboard_data.json"
 PORT = int(os.environ.get("PORT", "8000"))
 USE_SAMPLE = os.environ.get("USE_SAMPLE", "").lower() in ("1", "true", "yes")
 
@@ -144,4 +144,4 @@ if __name__ == "__main__":
     print(f"\n  Braze dashboard → http://localhost:{PORT}", flush=True)
     print(f"  Mode: {'SAMPLE DATA' if USE_SAMPLE else 'LIVE (needs BRAZE_API_KEY + BRAZE_REST_ENDPOINT)'}\n", flush=True)
     # debug=False so the dev server doesn't double-spawn the extractor on file changes
-    app.run(host="127.0.0.1", port=PORT, debug=False)
+    app.run(host="0.0.0.0", port=PORT, debug=False)
