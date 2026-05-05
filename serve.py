@@ -25,6 +25,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+import base64
 
 print(f"[serve.py] Python: {sys.executable}", flush=True)
 print(f"[serve.py] sys.path: {sys.path}", flush=True)
@@ -37,6 +38,38 @@ PORT = int(os.environ.get("PORT", "8000"))
 USE_SAMPLE = os.environ.get("USE_SAMPLE", "").lower() in ("1", "true", "yes")
 
 app = Flask(__name__, static_folder=None)
+
+# ----- Basic Auth -----
+DASHBOARD_USERNAME = os.environ.get("DASHBOARD_USERNAME", "").strip()
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "").strip()
+AUTH_ENABLED = bool(DASHBOARD_USERNAME and DASHBOARD_PASSWORD)
+
+
+@app.before_request
+def _require_auth():
+    if not AUTH_ENABLED:
+        return None  # auth disabled when env vars are unset
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Basic "):
+        return _auth_challenge()
+    try:
+        decoded = base64.b64decode(auth[6:]).decode("utf-8", errors="replace")
+        user, _, pw = decoded.partition(":")
+    except Exception:
+        return _auth_challenge()
+    if user != DASHBOARD_USERNAME or pw != DASHBOARD_PASSWORD:
+        return _auth_challenge()
+    return None
+
+
+def _auth_challenge():
+    return (
+        "Authentication required.",
+        401,
+        {"WWW-Authenticate": 'Basic realm="Braze Dashboard"'},
+    )
+# ----- /Basic Auth -----
+
 
 refresh_lock = threading.Lock()
 refresh_state = {"running": False, "last_run": None, "last_status": "idle", "last_error": None}
