@@ -10,18 +10,19 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --bg: #0f0e0c;
-    --bg-soft: #1a1816;
-    --bg-card: #16140f;
-    --ink: #f4ecdc;
-    --ink-dim: #a89c84;
-    --ink-faint: #6b6253;
-    --line: #2a2622;
-    --accent: #ff9a3c;
-    --accent-2: #f0e0c0;
-    --good: #6dcf95;
-    --bad: #e07a6a;
-    --warn: #d9a441;
+    --bg: #ffffff;
+    --bg-soft: #f7f8fa;
+    --bg-card: #ffffff;
+    --ink: #101820;
+    --ink-dim: #5d6069;
+    --ink-faint: #9aa0a8;
+    --line: #e6e8ec;
+    --accent: #0b25ed;
+    --accent-2: #3962ff;
+    --accent-pale: #c7dbff;
+    --good: #10b981;
+    --bad: #ef4444;
+    --warn: #f59e0b;
     --display: 'Fraunces', Georgia, serif;
     --body: 'Manrope', system-ui, sans-serif;
     --mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -29,10 +30,10 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--body); -webkit-font-smoothing: antialiased; }
   body {
-    background-image:
-      radial-gradient(circle at 12% 8%, rgba(255,154,60,0.08), transparent 35%),
-      radial-gradient(circle at 95% 90%, rgba(240,224,192,0.04), transparent 40%),
-      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.025 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background:
+      radial-gradient(circle at 12% 8%, rgba(11,37,237,0.04), transparent 50%),
+      radial-gradient(circle at 95% 90%, rgba(57,98,255,0.025), transparent 55%),
+      var(--bg);
     min-height: 100vh;
   }
 
@@ -62,11 +63,11 @@
   .filter-window { display: flex; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
   .filter-window button { flex: 1; background: var(--bg); color: var(--ink-dim); border: 0; padding: 9px; font-family: var(--mono); font-size: 11px; font-weight: 500; cursor: pointer; letter-spacing: 0.08em; text-transform: uppercase; transition: all 0.15s; border-right: 1px solid var(--line); }
   .filter-window button:last-child { border-right: 0; }
-  .filter-window button.active { background: var(--accent); color: var(--bg); }
+  .filter-window button.active { background: var(--accent); color: #ffffff; }
   .filter-window button:not(.active):hover { background: var(--bg-soft); color: var(--ink); }
 
   /* KPI cards */
-  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(16,24,32,0.04), 0 1px 3px rgba(16,24,32,0.06); }
   .kpi { background: var(--bg-card); padding: 22px 20px 18px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; }
   .kpi::before { content: ""; position: absolute; top: 0; left: 0; height: 2px; width: 32px; background: var(--accent); }
   .kpi-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
@@ -79,7 +80,7 @@
   .row-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
   @media (max-width: 1100px) { .row-2 { grid-template-columns: 1fr; } }
 
-  .panel { background: var(--bg-card); border: 1px solid var(--line); padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: var(--bg-card); border: 1px solid var(--line); border-radius: 8px; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 1px 2px rgba(16,24,32,0.04), 0 1px 3px rgba(16,24,32,0.06); }
   .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
   .panel-title { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: -0.01em; }
   .panel-sub { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); letter-spacing: 0.06em; text-transform: uppercase; }
@@ -87,7 +88,7 @@
 
   /* Refresh button */
   .refresh-btn { background: var(--bg-soft); color: var(--ink-dim); border: 1px solid var(--line); padding: 8px 14px; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; border-radius: 2px; margin-top: 8px; transition: all 0.15s; display: inline-flex; align-items: center; gap: 8px; }
-  .refresh-btn:hover:not(:disabled) { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .refresh-btn:hover:not(:disabled) { background: var(--accent); color: #ffffff; border-color: var(--accent); }
   .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
   .refresh-btn .spinner { width: 10px; height: 10px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
   .refresh-btn.loading .spinner { display: inline-block; }
@@ -100,24 +101,24 @@
   .view-tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; background: var(--bg-soft); }
   .view-tabs button { background: transparent; color: var(--ink-dim); border: 0; padding: 11px 22px; font-family: var(--display); font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.15s; border-right: 1px solid var(--line); letter-spacing: -0.01em; position: relative; }
   .view-tabs button:last-child { border-right: 0; }
-  .view-tabs button.active { background: var(--ink); color: var(--bg); }
+  .view-tabs button.active { background: var(--accent); color: #ffffff; }
   .view-tabs button:not(.active):hover { color: var(--ink); background: var(--bg); }
   .alert-badge { display: inline-block; background: var(--bad); color: var(--bg); border-radius: 999px; padding: 1px 7px; font-family: var(--mono); font-size: 10px; font-weight: 700; margin-left: 8px; vertical-align: middle; }
 
   /* Channel chips/pills */
   .channel-pill { display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; color: var(--bg); }
-  .ch-email { background: #f0e0c0; }
-  .ch-ios_push { background: #ff9a3c; }
-  .ch-android_push { background: #6dcf95; }
-  .ch-web_push { background: #d9a441; }
-  .ch-sms { background: #e07a6a; color: var(--ink); }
-  .ch-webhook { background: #8a7eb8; color: var(--ink); }
+  .ch-email { background: var(--accent); color: #fff; }
+  .ch-ios_push { background: var(--accent-2); color: #fff; }
+  .ch-android_push { background: var(--good); color: #fff; }
+  .ch-web_push { background: var(--warn); color: #fff; }
+  .ch-sms { background: var(--bad); color: #fff; }
+  .ch-webhook { background: #6b7280; color: #fff; }
   .ch-none, .ch-__total__ { background: var(--line); color: var(--ink-dim); }
   .ch-__all__ { background: var(--bg-soft); color: var(--ink-dim); border: 1px solid var(--line); }
 
   .type-pill { display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; }
-  .type-canvas { background: rgba(255,154,60,0.15); color: var(--accent); border: 1px solid rgba(255,154,60,0.3); }
-  .type-campaign { background: rgba(109,207,149,0.12); color: var(--good); border: 1px solid rgba(109,207,149,0.3); }
+  .type-canvas { background: rgba(11,37,237,0.12); color: var(--accent); border: 1px solid rgba(11,37,237,0.25); }
+  .type-campaign { background: rgba(16,185,129,0.10); color: var(--good); border: 1px solid rgba(16,185,129,0.30); }
 
   /* Tables */
   .table-wrap { overflow-x: auto; }
@@ -127,7 +128,7 @@
   tbody td { padding: 14px; border-bottom: 1px solid var(--line); color: var(--ink-dim); }
   tbody td.num { text-align: right; font-family: var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
   tbody td.step-name, tbody td.flow-name { color: var(--ink); font-weight: 500; }
-  tbody tr:hover { background: rgba(255, 154, 60, 0.04); }
+  tbody tr:hover { background: rgba(11, 37, 237, 0.04); }
 
   /* Overview table */
   table.overview thead th { cursor: pointer; user-select: none; transition: color 0.15s; }
@@ -147,7 +148,7 @@
   .delta.flat { color: var(--ink-faint); }
 
   .health-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-  .health-good { background: var(--good); box-shadow: 0 0 6px var(--good); }
+  .health-good { background: var(--good); box-shadow: 0 0 0 3px rgba(16,185,129,0.18); }
   .health-warn { background: var(--warn); }
   .health-bad { background: var(--bad); box-shadow: 0 0 6px var(--bad); }
   .health-cold { background: var(--ink-faint); }
@@ -156,7 +157,7 @@
   .alert-card { background: var(--bg-card); border: 1px solid var(--line); border-left: 3px solid var(--ink-faint); padding: 16px 20px; margin-bottom: 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; transition: all 0.15s; cursor: pointer; }
   .alert-card.severity-critical { border-left-color: var(--bad); }
   .alert-card.severity-warning { border-left-color: var(--warn); }
-  .alert-card:hover { background: rgba(255,154,60,0.04); }
+  .alert-card:hover { background: rgba(11,37,237,0.04); }
   .alert-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-weight: 700; }
   .alert-icon.severity-critical { background: rgba(224,122,106,0.15); color: var(--bad); }
   .alert-icon.severity-warning { background: rgba(217,164,65,0.15); color: var(--warn); }
@@ -776,7 +777,7 @@ function renderTrend() {
     type: 'line',
     data: { labels: dates.map(d => d.slice(5)), datasets: [
       ds('Sent', sentS, '#f0e0c0', 'rgba(240,224,192,0.08)'),
-      ds('Opens', opensS, '#ff9a3c', 'rgba(255,154,60,0.10)'),
+      ds('Opens', opensS, '#ff9a3c', 'rgba(11,37,237,0.08)'),
       ds('Clicks', clicksS, '#6dcf95', 'rgba(109,207,149,0.08)'),
     ] },
     options: chartOpts(),
