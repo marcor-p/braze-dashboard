@@ -166,6 +166,109 @@ def _run_extractor() -> None:
     DATA_PATH.write_bytes(src.read_bytes())
 
 
+
+
+# ----- Threshold management endpoints -----
+THRESHOLD_DEFAULTS = {
+    "email_delivery_min": 0.95,
+    "email_open_drop_pp": -5.0,
+    "email_click_drop_pp": -2.0,
+    "email_unsub_max": 0.005,
+    "email_spam_max": 0.001,
+    "push_delivery_min": 0.97,
+    "push_open_drop_pp": -3.0,
+    "sms_delivery_min": 0.98,
+    "sms_optout_max": 0.01,
+    "all_volume_collapse_pct": 0.50,
+    "all_min_sample": 1000,
+}
+
+def _config_path():
+    out = Path(os.environ.get("BRAZE_OUT_DIR", str(ROOT)))
+    out.mkdir(parents=True, exist_ok=True)
+    return out / "alert_config.json"
+
+def _validate_threshold(key, value):
+    if key not in THRESHOLD_DEFAULTS:
+        return None, f"unknown threshold key: {key}"
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None, f"{key} must be a number"
+    if key.endswith("_min") and not (0.0 <= v <= 1.0):
+        return None, f"{key} must be between 0 and 1"
+    if key.endswith("_max") and not (0.0 <= v <= 1.0):
+        return None, f"{key} must be between 0 and 1"
+    if key.endswith("_drop_pp") and v > 0:
+        return None, f"{key} must be <= 0 (negative percentage points)"
+    if key == "all_volume_collapse_pct" and not (0.0 <= v <= 1.0):
+        return None, "volume collapse pct must be between 0 and 1"
+    if key == "all_min_sample":
+        if v < 0 or v != int(v):
+            return None, "min sample must be a non-negative integer"
+        v = int(v)
+    return v, None
+
+
+@app.route("/api/thresholds", methods=["GET"])
+def get_thresholds():
+    p = _config_path()
+    current = dict(THRESHOLD_DEFAULTS)
+    if p.exists():
+        try:
+            cfg = json.loads(p.read_text())
+            current.update(cfg.get("thresholds", {}))
+        except Exception as e:
+            return jsonify({"error": str(e), "defaults": THRESHOLD_DEFAULTS}), 500
+    return jsonify({"thresholds": current, "defaults": THRESHOLD_DEFAULTS, "saved": p.exists()})
+
+
+@app.route("/api/thresholds", methods=["POST"])
+def post_thresholds():
+    body = request.get_json(silent=True) or {}
+    incoming = body.get("thresholds", {})
+    if not isinstance(incoming, dict):
+        return jsonify({"ok": False, "error": "thresholds must be an object"}), 400
+    validated = {}
+    errors = []
+    for k, v in incoming.items():
+        val, err = _validate_threshold(k, v)
+        if err:
+            errors.append(err)
+        else:
+            validated[k] = val
+    if errors:
+        return jsonify({"ok": False, "errors": errors}), 400
+    p = _config_path()
+    existing = {}
+    if p.exists():
+        try:
+            existing = json.loads(p.read_text()).get("thresholds", {})
+        except Exception:
+            pass
+    merged = {**THRESHOLD_DEFAULTS, **existing, **validated}
+    p.write_text(json.dumps({"version": 1, "thresholds": merged}, indent=2))
+    # Re-run alerts immediately so dashboard reflects new thresholds
+    if DATA_PATH.exists():
+        try:
+            subprocess.check_call([
+                sys.executable, str(ROOT / "alerts.py"),
+                "--json", str(DATA_PATH), "--rewrite", "--quiet",
+            ], env={**os.environ, "BRAZE_OUT_DIR": str(p.parent)})
+        except subprocess.CalledProcessError as e:
+            return jsonify({"ok": True, "saved": merged, "warning": f"alerts re-run failed: {e}"}), 200
+    return jsonify({"ok": True, "saved": merged})
+
+
+@app.route("/api/thresholds/reset", methods=["POST"])
+def reset_thresholds():
+    p = _config_path()
+    if p.exists():
+        p.unlink()
+    return jsonify({"ok": True, "reset_to": THRESHOLD_DEFAULTS})
+
+# ----- /Threshold management endpoints -----
+
 if __name__ == "__main__":
     print(f"\n  Braze dashboard → http://0.0.0.0:{PORT}", flush=True)
     print(f"  Mode: {'SAMPLE DATA' if USE_SAMPLE else 'LIVE (needs BRAZE_API_KEY + BRAZE_REST_ENDPOINT)'}\n", flush=True)

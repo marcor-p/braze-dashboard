@@ -29,6 +29,40 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+# ----- Threshold loading (UI-editable via alert_config.json) -----
+DEFAULT_THRESHOLDS = {
+    "email_delivery_min": 0.95,
+    "email_open_drop_pp": -5.0,
+    "email_click_drop_pp": -2.0,
+    "email_unsub_max": 0.005,
+    "email_spam_max": 0.001,
+    "push_delivery_min": 0.97,
+    "push_open_drop_pp": -3.0,
+    "sms_delivery_min": 0.98,
+    "sms_optout_max": 0.01,
+    "all_volume_collapse_pct": 0.50,
+    "all_min_sample": 1000,
+}
+
+def load_thresholds():
+    out_dir = Path(os.environ.get("BRAZE_OUT_DIR", "./out")).resolve()
+    candidates = [out_dir / "alert_config.json", Path(__file__).parent / "alert_config.json"]
+    for p in candidates:
+        if p.exists():
+            try:
+                cfg = json.loads(p.read_text())
+                merged = dict(DEFAULT_THRESHOLDS)
+                merged.update(cfg.get("thresholds", {}))
+                return merged
+            except Exception as e:
+                print(f"WARN: failed to read {p}: {e}", file=sys.stderr)
+    return dict(DEFAULT_THRESHOLDS)
+
+THRESHOLDS = load_thresholds()
+# ----- /Threshold loading -----
+
+
+
 # ---------------------------------------------------------------------------
 # Tunable thresholds  — start strict, loosen after a week of real data
 # ---------------------------------------------------------------------------
@@ -102,39 +136,39 @@ def _agg_for(metric_rows: list[dict]) -> dict:
 
 
 def rule_open_rate_drop(cur, prev):
-    if cur["sent"] < 1000: return None
+    if cur["sent"] < THRESHOLDS['all_min_sample']: return None
     delta = cur["open_rate"] - prev["open_rate"]   # in fraction
-    if delta <= -0.05:  # 5 percentage points
+    if delta * 100 <= THRESHOLDS['email_open_drop_pp']:  # 5 percentage points
         return True, cur["open_rate"], prev["open_rate"], "critical"
-    if delta <= -0.02:
+    if delta * 100 <= THRESHOLDS['email_open_drop_pp'] / 2:
         return True, cur["open_rate"], prev["open_rate"], "warning"
     return None
 
 
 def rule_click_rate_drop(cur, prev):
-    if cur["sent"] < 1000: return None
+    if cur["sent"] < THRESHOLDS['all_min_sample']: return None
     delta = cur["click_rate"] - prev["click_rate"]
-    if delta <= -0.02:
+    if delta * 100 <= THRESHOLDS['email_click_drop_pp']:
         return True, cur["click_rate"], prev["click_rate"], "critical"
-    if delta <= -0.005:
+    if delta * 100 <= THRESHOLDS['email_click_drop_pp'] / 4:
         return True, cur["click_rate"], prev["click_rate"], "warning"
     return None
 
 
 def rule_delivery_rate_cliff(cur, prev):
     if cur["sent_for_delivery"] < 500: return None
-    if cur["delivery_rate"] < 0.90:
+    if cur["delivery_rate"] < THRESHOLDS['email_delivery_min'] - 0.05:
         return True, cur["delivery_rate"], prev["delivery_rate"], "critical"
-    if cur["delivery_rate"] < 0.95 and prev["delivery_rate"] >= 0.97:
+    if cur["delivery_rate"] < THRESHOLDS['email_delivery_min'] and prev["delivery_rate"] >= 0.97:
         return True, cur["delivery_rate"], prev["delivery_rate"], "warning"
     return None
 
 
 def rule_unsub_spike(cur, prev):
     if cur["delivered"] < 1000: return None
-    if cur["unsub_rate"] > 0.005 and cur["unsub_rate"] > prev["unsub_rate"] * 2:
+    if cur["unsub_rate"] > THRESHOLDS['email_unsub_max'] and cur["unsub_rate"] > prev["unsub_rate"] * 2:
         return True, cur["unsub_rate"], prev["unsub_rate"], "critical"
-    if cur["unsub_rate"] > 0.003 and cur["unsub_rate"] > prev["unsub_rate"] * 1.5:
+    if cur["unsub_rate"] > THRESHOLDS['email_unsub_max'] * 0.6 and cur["unsub_rate"] > prev["unsub_rate"] * 1.5:
         return True, cur["unsub_rate"], prev["unsub_rate"], "warning"
     return None
 
@@ -159,15 +193,26 @@ def rule_webhook_errors(cur, prev):
 
 def rule_volume_collapse(cur, prev):
     """Catches 'the trigger broke' — current sends way below prior baseline."""
-    if prev["sent"] < 700:  # need enough baseline volume to flag
+    if prev["sent"] < THRESHOLDS['all_min_sample'] * 0.7:  # need enough baseline volume to flag
         return None
     ratio = cur["sent"] / max(prev["sent"], 1)
-    if ratio < 0.5:
+    if ratio < THRESHOLDS['all_volume_collapse_pct']:
         return True, float(cur["sent"]), float(prev["sent"]), "critical"
-    if ratio < 0.7:
+    if ratio < THRESHOLDS['all_volume_collapse_pct'] + 0.2:
         return True, float(cur["sent"]), float(prev["sent"]), "warning"
     return None
 
+
+
+def rule_spam_spike(cur, prev):
+    if cur["delivered"] < THRESHOLDS['all_min_sample']: return None
+    spam_rate = cur.get("reported_spam", 0) / max(cur.get("delivered", 1), 1) if cur.get("delivered") else 0
+    prev_spam = prev.get("reported_spam", 0) / max(prev.get("delivered", 1), 1) if prev.get("delivered") else 0
+    if spam_rate > THRESHOLDS['email_spam_max']:
+        return True, spam_rate, prev_spam, "critical"
+    if spam_rate > THRESHOLDS['email_spam_max'] * 0.5 and spam_rate > prev_spam * 2:
+        return True, spam_rate, prev_spam, "warning"
+    return None
 
 RULES = [
     ("open_rate_drop",     "open_rate",     "Open rate dropped sharply",   rule_open_rate_drop),
@@ -177,6 +222,7 @@ RULES = [
     ("bounce_spike",       "bounce_rate",   "Bounce rate elevated",        rule_bounce_spike),
     ("webhook_errors",     "error_rate",    "Webhook error rate elevated", rule_webhook_errors),
     ("volume_collapse",    "sent",          "Send volume collapsed",       rule_volume_collapse),
+    ("spam_spike",         "spam_rate",     "Spam complaint rate elevated", rule_spam_spike),
 ]
 
 

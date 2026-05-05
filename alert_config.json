@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "thresholds": {
+    "email_delivery_min": 0.95,
+    "email_open_drop_pp": -5.0,
+    "email_click_drop_pp": -2.0,
+    "email_unsub_max": 0.005,
+    "email_spam_max": 0.001,
+    "push_delivery_min": 0.97,
+    "push_open_drop_pp": -3.0,
+    "sms_delivery_min": 0.98,
+    "sms_optout_max": 0.01,
+    "all_volume_collapse_pct": 0.5,
+    "all_min_sample": 1000
+  }
+}

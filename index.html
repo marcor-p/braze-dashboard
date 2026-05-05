@@ -248,6 +248,7 @@
       <button data-view="overview" class="active">All flows</button>
       <button data-view="detail">Detail</button>
       <button data-view="alerts">Alerts <span id="alert-badge" class="alert-badge" style="display:none">0</span></button>
+      <button data-view="settings">Settings</button>
     </div>
   </div>
 
@@ -335,6 +336,86 @@
       <div class="panel-sub" id="alerts-sub">—</div>
     </div>
     <div id="alerts-list"></div>
+  </section>
+
+  
+  <!-- SETTINGS -->
+  <section class="panel" id="settings-panel" style="display:none">
+    <div class="panel-head">
+      <h2 class="panel-title">Alert thresholds</h2>
+      <div class="panel-sub" id="settings-sub">Customize when alerts fire — saved to /data/alert_config.json</div>
+    </div>
+    <div id="settings-form">
+      <div class="settings-section">
+        <h3 class="settings-section-title">Email rules</h3>
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>Min delivery rate <em>(0-1, e.g. 0.95)</em></span>
+            <input type="number" step="0.01" data-key="email_delivery_min" />
+          </label>
+          <label class="settings-field">
+            <span>Open rate drop alert (pp) <em>(negative, e.g. -5)</em></span>
+            <input type="number" step="0.5" data-key="email_open_drop_pp" />
+          </label>
+          <label class="settings-field">
+            <span>Click rate drop alert (pp) <em>(negative)</em></span>
+            <input type="number" step="0.5" data-key="email_click_drop_pp" />
+          </label>
+          <label class="settings-field">
+            <span>Max unsubscribe rate <em>(0-1, e.g. 0.005)</em></span>
+            <input type="number" step="0.001" data-key="email_unsub_max" />
+          </label>
+          <label class="settings-field">
+            <span>Max spam-report rate <em>(0-1, default 0.001)</em></span>
+            <input type="number" step="0.0005" data-key="email_spam_max" />
+          </label>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3 class="settings-section-title">Push rules <em style="color:var(--ink-faint);font-weight:400;font-size:11px">(iOS + Android + Web)</em></h3>
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>Min delivery rate</span>
+            <input type="number" step="0.01" data-key="push_delivery_min" />
+          </label>
+          <label class="settings-field">
+            <span>Direct open rate drop (pp)</span>
+            <input type="number" step="0.5" data-key="push_open_drop_pp" />
+          </label>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3 class="settings-section-title">SMS rules</h3>
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>Min delivery rate</span>
+            <input type="number" step="0.01" data-key="sms_delivery_min" />
+          </label>
+          <label class="settings-field">
+            <span>Max opt-out rate</span>
+            <input type="number" step="0.001" data-key="sms_optout_max" />
+          </label>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3 class="settings-section-title">All channels</h3>
+        <div class="settings-grid">
+          <label class="settings-field">
+            <span>Volume collapse threshold <em>(0-1, e.g. 0.5 = alert if sends drop below 50% of baseline)</em></span>
+            <input type="number" step="0.05" data-key="all_volume_collapse_pct" />
+          </label>
+          <label class="settings-field">
+            <span>Min sample size <em>(skip alerting on small sends)</em></span>
+            <input type="number" step="100" data-key="all_min_sample" />
+          </label>
+        </div>
+      </div>
+      <div class="settings-actions">
+        <button class="btn-primary" id="btn-save-thresholds">Save changes</button>
+        <button class="btn-secondary" id="btn-reset-thresholds">Reset to defaults</button>
+        <span class="settings-status" id="settings-status"></span>
+      </div>
+    </div>
   </section>
 
   <div id="empty" class="empty-state">— Awaiting data —</div>
@@ -519,6 +600,11 @@ function setView(view) {
   overview.style.display = view === 'overview' ? 'flex' : 'none';
   detail.style.display = view === 'detail' ? 'block' : 'none';
   alerts.style.display = view === 'alerts' ? 'flex' : 'none';
+  const settings = document.getElementById('settings-panel');
+  if (settings) {
+    settings.style.display = view === 'settings' ? 'flex' : 'none';
+    if (view === 'settings') loadThresholds();
+  }
 
   // Filter applicability per view
   document.getElementById('f-flow').disabled = view !== 'detail';
@@ -965,6 +1051,87 @@ async function setupRefreshButton() {
     }
   });
 }
+
+
+// ============================================================================
+// Settings tab — load / save / reset thresholds
+// ============================================================================
+async function loadThresholds() {
+  try {
+    const r = await fetch('/api/thresholds');
+    if (!r.ok) throw new Error('failed to load');
+    const j = await r.json();
+    document.querySelectorAll('#settings-form input[data-key]').forEach(input => {
+      const key = input.dataset.key;
+      if (j.thresholds && j.thresholds[key] !== undefined) {
+        input.value = j.thresholds[key];
+        input.placeholder = String(j.defaults[key] || '');
+      }
+    });
+  } catch (e) {
+    console.error('Failed to load thresholds:', e);
+  }
+}
+
+async function saveThresholds() {
+  const status = document.getElementById('settings-status');
+  status.className = 'settings-status'; status.textContent = 'Saving…';
+  const thresholds = {};
+  document.querySelectorAll('#settings-form input[data-key]').forEach(input => {
+    const v = input.value.trim();
+    if (v !== '') thresholds[input.dataset.key] = parseFloat(v);
+  });
+  try {
+    const r = await fetch('/api/thresholds', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thresholds }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      status.className = 'settings-status err';
+      status.textContent = (j.errors || [j.error || 'save failed']).join('; ');
+      return;
+    }
+    status.className = 'settings-status ok';
+    status.textContent = j.warning ? `Saved (${j.warning})` : 'Saved · alerts re-evaluated';
+    // refetch alerts data so dashboard reflects new thresholds
+    if (DATA && j.warning === undefined) {
+      try {
+        const data = await (await fetch('/dashboard_data.json', { cache: 'no-store' })).json();
+        DATA.alerts = data.alerts || [];
+        if (currentView === 'alerts') render();
+      } catch {}
+    }
+  } catch (e) {
+    status.className = 'settings-status err';
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function resetThresholds() {
+  if (!confirm('Reset all thresholds to defaults? This deletes alert_config.json.')) return;
+  const status = document.getElementById('settings-status');
+  status.className = 'settings-status'; status.textContent = 'Resetting…';
+  try {
+    const r = await fetch('/api/thresholds/reset', { method: 'POST' });
+    if (!r.ok) throw new Error('reset failed');
+    await loadThresholds();
+    status.className = 'settings-status ok';
+    status.textContent = 'Reset to defaults';
+  } catch (e) {
+    status.className = 'settings-status err';
+    status.textContent = 'Error: ' + e.message;
+  }
+}
+
+function bindSettings() {
+  const save = document.getElementById('btn-save-thresholds');
+  const reset = document.getElementById('btn-reset-thresholds');
+  if (save) save.addEventListener('click', saveThresholds);
+  if (reset) reset.addEventListener('click', resetThresholds);
+}
+
 
 // ============================================================================
 // Helpers
