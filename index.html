@@ -508,6 +508,11 @@ function onLoaded() {
   bindFilters();
   bindViewSwitcher();
   bindOverviewSorting();
+  bindStepSort();
+  const _dlStep = document.getElementById('btn-download-step');
+  if (_dlStep) _dlStep.addEventListener('click', downloadStepCsv);
+  const _dlOv = document.getElementById('btn-download-overview');
+  if (_dlOv) _dlOv.addEventListener('click', downloadOverviewCsv);
   setView(currentView);
   render();
 }
