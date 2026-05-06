@@ -256,7 +256,10 @@
   <section class="panel" id="overview-panel" style="display:none">
     <div class="panel-head">
       <h2 class="panel-title" id="overview-title">All flows — at a glance</h2>
-      <div class="panel-sub" id="overview-sub">—</div>
+      <div class="panel-actions">
+        <div class="panel-sub" id="overview-sub">—</div>
+        <button class="btn-download" id="btn-download-overview">Download CSV</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table class="overview" id="overview-table">
@@ -304,22 +307,25 @@
   <section class="panel" id="step-panel">
     <div class="panel-head">
       <h2 class="panel-title">By step</h2>
-      <div class="panel-sub" id="step-sub">—</div>
+      <div class="panel-actions">
+        <div class="panel-sub" id="step-sub">—</div>
+        <button class="btn-download" id="btn-download-step">Download CSV</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table id="step-table">
         <thead>
           <tr>
-            <th>Step</th>
-            <th>Channel</th>
-            <th class="num">Sent</th>
-            <th class="num">Delivered</th>
-            <th class="num">Delivery %</th>
-            <th class="num">Opens / Direct</th>
-            <th class="num">Open %</th>
-            <th class="num">Clicks</th>
-            <th class="num">Click %</th>
-            <th class="num">Errors / Bounces</th>
+            <th data-sort="step">Step <span class="sort-arrow"></span></th>
+            <th data-sort="channel">Channel <span class="sort-arrow"></span></th>
+            <th data-sort="sent" class="num sorted">Sent <span class="sort-arrow">▼</span></th>
+            <th data-sort="delivered" class="num">Delivered <span class="sort-arrow"></span></th>
+            <th data-sort="deliveryRate" class="num">Delivery % <span class="sort-arrow"></span></th>
+            <th data-sort="opens" class="num">Opens / Direct <span class="sort-arrow"></span></th>
+            <th data-sort="openRate" class="num">Open % <span class="sort-arrow"></span></th>
+            <th data-sort="clicks" class="num">Clicks <span class="sort-arrow"></span></th>
+            <th data-sort="clickRate" class="num">Click % <span class="sort-arrow"></span></th>
+            <th data-sort="errBounces" class="num">Errors / Bounces <span class="sort-arrow"></span></th>
           </tr>
         </thead>
         <tbody id="step-tbody"></tbody>
@@ -917,6 +923,9 @@ function renderChannelChart() {
   });
 }
 
+let stepSort = { key: 'sent', dir: 'desc' };
+let lastStepEntries = [];
+
 function renderStepTable() {
   const rows = filterRows();
   const groups = {};
@@ -925,21 +934,36 @@ function renderStepTable() {
     (groups[k] = groups[k] || { step: r.step_name, flow: r.flow_name,
                                 ftype: r.flow_type, channel: r.channel, rows: [] }).rows.push(r);
   }
-  const entries = Object.values(groups).map(g => ({ ...g, ...aggregateMetrics(g.rows) }))
-    .sort((a, b) => b.sent - a.sent);
+  let entries = Object.values(groups).map(g => {
+    const m = aggregateMetrics(g.rows);
+    const opens = g.channel === 'email' ? sum(g.rows, 'unique_opens')
+                : g.channel.endsWith('_push') ? sum(g.rows, 'direct_opens') : 0;
+    const clicks = g.channel === 'email' ? sum(g.rows, 'unique_clicks')
+                 : g.channel.endsWith('_push') ? sum(g.rows, 'body_clicks') : 0;
+    const errBounces = g.channel === 'webhook' ? m.errors : m.bounces;
+    return { ...g, ...m, opens, clicks, errBounces };
+  });
+
+  // Sort
+  const { key, dir } = stepSort;
+  entries.sort((a, b) => {
+    let av, bv;
+    if (key === 'step')      { av = (a.step || '').toLowerCase(); bv = (b.step || '').toLowerCase(); }
+    else if (key === 'channel') { av = a.channel; bv = b.channel; }
+    else                       { av = Number(a[key]) || 0; bv = Number(b[key]) || 0; }
+    if (av < bv) return dir === 'desc' ? 1 : -1;
+    if (av > bv) return dir === 'desc' ? -1 : 1;
+    return 0;
+  });
+
+  lastStepEntries = entries;  // for CSV export
 
   const tbody = document.getElementById('step-tbody');
   if (entries.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--ink-faint);padding:32px">No data for the selected filters.</td></tr>`;
     return;
   }
-  tbody.innerHTML = entries.map(e => {
-    const opens = e.channel === 'email' ? sum(e.rows, 'unique_opens')
-                : e.channel.endsWith('_push') ? sum(e.rows, 'direct_opens') : 0;
-    const clicks = e.channel === 'email' ? sum(e.rows, 'unique_clicks')
-                 : e.channel.endsWith('_push') ? sum(e.rows, 'body_clicks') : 0;
-    const errBounces = e.channel === 'webhook' ? e.errors : e.bounces;
-    return `<tr>
+  tbody.innerHTML = entries.map(e => `<tr>
       <td class="step-name">${escapeHtml(e.step)}<br>
         <span style="color:var(--ink-faint);font-size:11px;font-family:var(--mono)">
           <span class="type-pill type-${e.ftype}">${e.ftype === 'canvas' ? 'CV' : 'CP'}</span>
@@ -950,13 +974,76 @@ function renderStepTable() {
       <td class="num">${fmtInt(e.sent)}</td>
       <td class="num">${fmtInt(e.delivered)}</td>
       <td class="num">${fmtPct(e.deliveryRate)}</td>
-      <td class="num">${fmtInt(opens)}</td>
+      <td class="num">${fmtInt(e.opens)}</td>
       <td class="num">${fmtPct(e.openRate)}</td>
-      <td class="num">${fmtInt(clicks)}</td>
+      <td class="num">${fmtInt(e.clicks)}</td>
       <td class="num">${fmtPct(e.clickRate)}</td>
-      <td class="num">${fmtInt(errBounces)}</td>
-    </tr>`;
-  }).join('');
+      <td class="num">${fmtInt(e.errBounces)}</td>
+    </tr>`).join('');
+}
+
+function bindStepSort() {
+  document.querySelectorAll('#step-table thead th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (!key) return;
+      if (stepSort.key === key) stepSort.dir = stepSort.dir === 'desc' ? 'asc' : 'desc';
+      else stepSort = { key, dir: 'desc' };
+      document.querySelectorAll('#step-table thead th').forEach(t => {
+        t.classList.remove('sorted');
+        const sa = t.querySelector('.sort-arrow');
+        if (sa) sa.textContent = '';
+      });
+      th.classList.add('sorted');
+      const arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = stepSort.dir === 'desc' ? '▼' : '▲';
+      renderStepTable();
+    });
+  });
+}
+
+// CSV helpers
+function csvEscape(v) {
+  if (v == null) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function downloadCsv(filename, rows) {
+  const csv = rows.map(r => r.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+function downloadStepCsv() {
+  const f = getFilters();
+  const stamp = new Date().toISOString().slice(0,10);
+  const fname = `braze-by-step-${stamp}-${f.window}d.csv`;
+  const rows = [['Step','Flow','Type','Channel','Sent','Delivered','Delivery %','Opens/Direct','Open %','Clicks','Click %','Errors/Bounces']];
+  for (const e of lastStepEntries) {
+    rows.push([
+      e.step, e.flow, e.ftype, channelLabel(e.channel),
+      e.sent, e.delivered, (e.deliveryRate*100).toFixed(2)+'%',
+      e.opens, (e.openRate*100).toFixed(2)+'%',
+      e.clicks, (e.clickRate*100).toFixed(2)+'%',
+      e.errBounces,
+    ]);
+  }
+  downloadCsv(fname, rows);
+}
+function downloadOverviewCsv() {
+  const f = getFilters();
+  const stamp = new Date().toISOString().slice(0,10);
+  const fname = `braze-overview-${stamp}-${f.window}d.csv`;
+  const tbody = document.getElementById('overview-tbody');
+  const rows = [['Name','Type','Sent','Delivery %','Open %','Δ Open %','Click %','Conversions','Unsubs','Health']];
+  tbody.querySelectorAll('tr[data-flow]').forEach(tr => {
+    const cells = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.replace(/\s+/g, ' ').trim());
+    rows.push(cells);
+  });
+  downloadCsv(fname, rows);
 }
 
 // ============================================================================
