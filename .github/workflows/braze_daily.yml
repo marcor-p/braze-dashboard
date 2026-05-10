@@ -3,7 +3,7 @@ name: Braze daily extract + alerts
 on:
   schedule:
     - cron: "30 6 * * *"     # daily 06:30 UTC
-  workflow_dispatch:
+  workflow_dispatch: # Manual trigger only
 
 jobs:
   extract:
